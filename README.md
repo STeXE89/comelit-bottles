@@ -106,7 +106,8 @@ The script installs what is missing:
 ## License
 MIT, see [LICENSE](LICENSE): you can use, modify and redistribute this script, also in forks and derived projects, keeping the copyright notice. The license covers this script and its documentation only, not the Comelit programs it installs.
 
-## Contributing
-Main project: https://github.com/STeXE89/comelit-bottles
+## Changelog
+Changes for each version are in [CHANGELOG.md](CHANGELOG.md); the same notes are on the [releases page](https://github.com/STeXE89/comelit-bottles/releases).
 
-Forks are welcome; if you use or redistribute this project, please mention the original one. Bug reports, fixes and improvements are welcome too: contributions to the main project help everyone using these programs on Linux.
+## Contributing
+Bug reports, fixes and improvements are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) for what to include in a report and how to propose a change. Forks are welcome too; if you use or redistribute this project, please mention the original one: https://github.com/STeXE89/comelit-bottles
