@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to Comelit software on Bottles (Linux). Dates are release dates (YYYY-MM-DD); authors are listed in [AUTHORS](AUTHORS).
 
-## [Unreleased]
+## [1.1.0] - 2026-09-28 - script self-update
 ### Added
 - Check at start for a new release on GitHub, with confirmation, update of all the files of the release (git fast forward in a clone, release files otherwise) and restart with the same arguments
 - `--self-update` command and `NO_SELF_UPDATE`, `SELF_UPDATE` options
