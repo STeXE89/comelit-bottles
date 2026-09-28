@@ -1,0 +1,112 @@
+# Comelit software on Bottles (Linux)
+
+Comelit VIP Manager, Safe Manager and Simple Prog are desktop programs developed for Windows. This script lets you install and use them on Linux:
+
+- **VIP Manager**: VIP IP video door entry systems
+- **Safe Manager**: intrusion alarm systems
+- **Simple Prog**: home automation systems
+
+It sets up Bottles (Flatpak) with Wine and the Windows components the programs need, installs the programs, keeps them updated from Comelit Pro and adds them to the applications menu, with USB/serial devices available as COM ports.
+
+> **Note**: these are Windows programs running through Wine, not natively. Malfunctions and imperfect graphics (wrong colors or fonts, misaligned or badly drawn windows and controls) may occur. Wine is not an officially supported platform for these programs: for critical operations, or if a problem cannot be solved, use a Windows PC.
+
+## Usage
+```bash
+git clone https://github.com/STeXE89/comelit-bottles.git
+cd comelit-bottles
+./setup-comelit-bottles.sh                           # install/update all programs
+./setup-comelit-bottles.sh safemanager               # one program (vipmanager, safemanager, simpleprog)
+./setup-comelit-bottles.sh --check                   # compare installed versions with Comelit Pro
+./setup-comelit-bottles.sh --status                  # bottles, runners, installed versions
+./setup-comelit-bottles.sh --diagnose safemanager    # start with a Wine debug log
+./setup-comelit-bottles.sh --com                     # map connected serial devices to COM ports
+./setup-comelit-bottles.sh --backup                  # full backup of the bottle
+./setup-comelit-bottles.sh --restore backups/<file>  # restore a bottle
+./setup-comelit-bottles.sh --net                     # network report: host interfaces, firewall, Wine adapters
+```
+
+## Bottles
+- **Default**: one bottle `Comelit` with all programs, Windows 11, Wine 11.0 runner (Kron4ek).
+- `SEPARATE_BOTTLES=1`: one bottle per program (`Comelit-VIPManager`, `Comelit-SafeManager`, `Comelit-SimpleProg`); Safe Manager on Wine 11.0, the others on the Bottles default runner.
+- Existing bottles are never converted or deleted. Safe Manager data (`C:\ProgramData\Comelit\SafeManager`) is not copied between bottles.
+
+## First run on a new PC
+The script installs what is missing:
+1. Host tools `flatpak curl unzip tar xz icoutils` (apt/dnf/pacman/zypper, sudo password).
+2. Flathub and Bottles; if already installed, Bottles and its runtimes are updated, with Flatpak's own progress (`SKIP_UPDATE=1` to skip).
+3. Flatpak permissions for the installers folder and USB/serial devices.
+4. Bottles first-run setup, if never done: complete the wizard, close Bottles, press Enter.
+5. `dialout` group for serial ports (log out/in afterwards).
+6. GNOME or Cinnamon "not responding" timeout: offers to raise it from 5 s to 60 s (KDE Plasma, XFCE and MATE check only when a window is closed: nothing to change).
+7. Latest winetricks and the Wine 11.0 runner.
+
+## Downloads and updates
+- Each run reads the Comelit Pro download pages (version, date, size). If the installed version is the latest, nothing is downloaded; a local zip of the same size is reused; otherwise the zip is downloaded into the script folder (e.g. `sw-vip-manager-2.18.1.zip`), with %, speed and ETA. Interrupted downloads resume.
+- Local zips in the script folder or `~/Downloads` are used too; `OFFLINE=1` uses only local zips. `KEEP_ZIPS=2` zips per program are kept.
+- Re-running is safe: bottles, data and settings are kept, installed dependencies are skipped.
+- A new version is installed in place after a **full backup of the bottle** (`backups/<bottle>-<date>.tar.zst`, `KEEP_BACKUPS=2`). Programs share registry, users and ProgramData, so only a whole-bottle snapshot restores consistently.
+- `--restore` asks for confirmation and renames the current bottle `<bottle>.before-restore-<date>`. The next online run updates the programs again; use `OFFLINE=1` to stay on the restored versions.
+
+## Specific versions
+- Put a program's zip (as downloaded from Comelit Pro) or installer (`Setup_VipManager.x.y.z.exe`, `Setup_SimpleProg_x.y.z.exe`, Safe Manager `Setup.msi`, also inside a subfolder) in `versions/`: that version is installed, or the installed one is updated or downgraded to it.
+- Same version as installed: nothing is done if it is the installer used last time; a different installer with the same version number (e.g. a rebuilt setup) is reinstalled: the installed version is removed first, after the full backup. `REINSTALL=1` reinstalls it anyway.
+- While the file is there, that program is not updated from Comelit Pro; remove it to follow Comelit Pro again. If the installed version is newer than the official release, the script asks whether to downgrade to the official release; the answer is remembered until the installed version changes.
+- The version is read from the file names (installer, zip, folder, release notes in the zip), from the MSI (`msiinfo`, package `msitools`) or from the exe version resource.
+- **A downgrade, or an installer whose version is not detected, asks for confirmation** (`ALLOW_DOWNGRADE=1`: no question, also without a terminal). The installed version is removed first, after the full backup of the bottle. An older version may not read data or settings saved by a newer one: `--restore` goes back.
+- One version per program: with two different versions of the same program in `versions/` the script stops.
+- `--check` and `--status` show the file in `versions/` and what will happen.
+
+## Options
+| Variable | Effect |
+|---|---|
+| `SEPARATE_BOTTLES=1` | one bottle per program |
+| `OFFLINE=1` | use local zips only |
+| `REINSTALL=1` | run the installer even if the version did not change |
+| `ALLOW_DOWNGRADE=1` | downgrade without asking (to the version in `versions/` or to the official release) |
+| `SETUP_WIZARD=1` | show the installers' wizards instead of installing unattended |
+| `DEPS_ONLY="dotnet48"` | install only these winetricks verbs |
+| `FORCE_DEPS=1` / `SKIP_DEPS=1` | reinstall / skip dependencies |
+| `SKIP_UPDATE=1` | do not update Bottles/Flatpak runtimes |
+| `NO_BACKUP=1` / `KEEP_BACKUPS=N` | no backup before updates / backups kept per bottle |
+| `KEEP_ZIPS=N` | installer zips kept per program |
+| `COM_DEV=/dev/ttyACM0` | devices mapped to COM1.. (comma separated) instead of auto-detection |
+| `NO_MENU=1` | no host applications menu entries |
+| `VIRTUAL_DESKTOP=1` | programs inside one Wine desktop window: `1` = screen size (default), `WxH`, `0` = off; the last value given is kept |
+| `NOT_RESPONDING_TIMEOUT=60` | seconds before GNOME/Cinnamon report a busy window as not responding (`0` = never) |
+
+## How it works
+- Dependencies: corefonts, tahoma, vcrun2022, gdiplus, dotnet48 (.NET Framework apps with DevExpress UI; wine-mono is not enough).
+- Dependencies and installers run with the Bottles soda runner, then the bottle switches to Wine 11: on Wine 11 the .NET installers ("ngen.exe not found") and Advanced Installer custom actions fail. Safe Manager needs Wine ≥ 9.10 at runtime (WMI `Win32_PnPEntity.Caption`).
+- .NET is verified before the installers run. A bottle with a failed .NET installation and no programs can be recreated (the old one is renamed `<bottle>.broken-<date>`).
+- `rundll32.exe.config` makes installer helpers use .NET 4 instead of the missing .NET 2.0.
+- Installers run unattended (Advanced Installer `/exenoui /qn`, MSI `/qn ALLUSERS=1`), extracted into `installers/<program name>/`.
+- By default the programs run inside one Wine desktop window (virtual desktop), which keeps their windows in the right stacking order with the host windows.
+- Programs are added to Bottles only if not already listed, and to the host applications menu (`~/.local/share/applications/comelit-<target>.desktop`, launchers and icons in `~/.local/share/comelit-bottles/`).
+- Each step shows the overall progress `[ 42%] (7/20)`; a live line shows elapsed time, activity and download progress. Logs are in `logs/`.
+
+## Serial ports (Safe Manager, Simple Prog)
+- Connected USB/serial devices are mapped to COM1, COM2, ... (Wine registry `HKLM\Software\Wine\Ports`) using the stable `/dev/serial/by-id/...` names, so moving a device to another USB port keeps its COM port. With one device connected it is always COM1.
+- The menu launcher refreshes the mapping at every start when the connected devices change (with a notification). Connect the device before starting the program. `--com` applies it immediately (e.g. when starting from Bottles).
+- The Windows USB driver shipped with Safe Manager cannot be installed in Wine: the panel must appear as `/dev/ttyACM*` or `/dev/ttyUSB*`.
+
+## Known limitations
+- Not all Windows functions are implemented in Wine: some features may not work or may behave differently than on Windows.
+- Graphics may not match Windows: custom skins, transparent controls, fonts and colors can be drawn incorrectly.
+- USB devices work only if Linux exposes them as serial ports; Windows drivers cannot be installed.
+- A Bottles, runner or program update can change the behaviour: backups allow going back.
+
+## Troubleshooting
+- **Program does not start**: `./setup-comelit-bottles.sh --diagnose <target>` shows the .NET exception, if any.
+- **Serial port not detected**: check `ls -l /dev/serial/by-id/` or `dmesg | tail`, run `--com`, select COM1 in the program; your user must be in `dialout`.
+- **Broken windows or graphics**: bottle → Settings, disable DXVK or try another runner.
+- **"Not responding" dialogs while a program loads**: the program is busy and Wine cannot answer the desktop's check (GNOME, Cinnamon) meanwhile. Raise the timeout with `NOT_RESPONDING_TIMEOUT=60` (or `0` to disable it for all applications).
+- **Program windows showing through other windows**: happens with the virtual desktop off (`VIRTUAL_DESKTOP=0`); run once with `VIRTUAL_DESKTOP=1` to turn it back on.
+- **LAN devices not found or connections failing** (cloud works): run `--net`. Check that the LAN with the devices is the default route (VPN, Docker, VirtualBox or libvirt interfaces can take broadcasts elsewhere), the host firewall (UDP broadcast and replies), and, if a program acts as a TFTP/SNMP server (firmware upload, traps), that low ports are allowed: `sudo sysctl -w net.ipv4.ip_unprivileged_port_start=69`.
+
+## License
+MIT, see [LICENSE](LICENSE): you can use, modify and redistribute this script, also in forks and derived projects, keeping the copyright notice. The license covers this script and its documentation only, not the Comelit programs it installs.
+
+## Contributing
+Main project: https://github.com/STeXE89/comelit-bottles
+
+Forks are welcome; if you use or redistribute this project, please mention the original one. Bug reports, fixes and improvements are welcome too: contributions to the main project help everyone using these programs on Linux.

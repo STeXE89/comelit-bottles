@@ -1,0 +1,11 @@
+# Created by the script at run time
+backups/
+cache/
+installers/
+logs/
+state/
+versions/
+
+# Downloaded installers
+*.zip
+*.part
