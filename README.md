@@ -1,5 +1,7 @@
 # Comelit software on Bottles (Linux)
 
+Version 1.0.0, released 2026-09-28.
+
 Comelit VIP Manager, Safe Manager and Simple Prog are desktop programs developed for Windows. This script lets you install and use them on Linux:
 
 - **VIP Manager**: VIP IP video door entry systems
@@ -16,6 +18,7 @@ git clone https://github.com/STeXE89/comelit-bottles.git
 cd comelit-bottles
 ./setup-comelit-bottles.sh                           # install/update all programs
 ./setup-comelit-bottles.sh safemanager               # one program (vipmanager, safemanager, simpleprog)
+./setup-comelit-bottles.sh --version                 # version, release date and authors
 ./setup-comelit-bottles.sh --check                   # compare installed versions with Comelit Pro
 ./setup-comelit-bottles.sh --status                  # bottles, runners, installed versions
 ./setup-comelit-bottles.sh --diagnose safemanager    # start with a Wine debug log
@@ -23,6 +26,7 @@ cd comelit-bottles
 ./setup-comelit-bottles.sh --backup                  # full backup of the bottle
 ./setup-comelit-bottles.sh --restore backups/<file>  # restore a bottle
 ./setup-comelit-bottles.sh --net                     # network report: host interfaces, firewall, Wine adapters
+./setup-comelit-bottles.sh --self-update             # check now for a new version of the script
 ```
 
 ## Bottles
@@ -46,6 +50,14 @@ The script installs what is missing:
 - Re-running is safe: bottles, data and settings are kept, installed dependencies are skipped.
 - A new version is installed in place after a **full backup of the bottle** (`backups/<bottle>-<date>.tar.zst`, `KEEP_BACKUPS=2`). Programs share registry, users and ProgramData, so only a whole-bottle snapshot restores consistently.
 - `--restore` asks for confirmation and renames the current bottle `<bottle>.before-restore-<date>`. The next online run updates the programs again; use `OFFLINE=1` to stay on the restored versions.
+
+## Script updates
+- At start, with any command, the script checks the latest release of this repository on GitHub, compares it with its own version and says whether it is up to date or a new version is available. Only `--help` and `--version` do not check.
+- A newer release is reported with its link and, **after confirmation**, installed; the script then restarts with the same arguments and continues normally.
+- All the files of the release are updated, not only the script: in a clone with a fast forward to the release tag (`git fetch` + `git merge --ff-only`); outside a clone the files of the release (script, README, CHANGELOG, LICENSE and the others) replace the current ones and the previous ones are saved in `backups/script-<version>-<date>.tar.gz`.
+- With changed tracked files in the clone, or if the fast forward is not possible (diverged branch), nothing is changed and the script asks you to run `git pull` yourself (log: `logs/self-update.log`).
+- Bottles, programs, data, downloaded installers and `versions/` are never touched.
+- `--self-update` checks and installs without restarting; `SELF_UPDATE=1` updates without asking; `NO_SELF_UPDATE=1` (and `OFFLINE=1`) skips the check.
 
 ## Specific versions
 - Put a program's zip (as downloaded from Comelit Pro) or installer (`Setup_VipManager.x.y.z.exe`, `Setup_SimpleProg_x.y.z.exe`, Safe Manager `Setup.msi`, also inside a subfolder) in `versions/`: that version is installed, or the installed one is updated or downgraded to it.
@@ -73,6 +85,8 @@ The script installs what is missing:
 | `NO_MENU=1` | no host applications menu entries |
 | `VIRTUAL_DESKTOP=1` | programs inside one Wine desktop window: `1` = screen size (default), `WxH`, `0` = off; the last value given is kept |
 | `NOT_RESPONDING_TIMEOUT=60` | seconds before GNOME/Cinnamon report a busy window as not responding (`0` = never) |
+| `NO_SELF_UPDATE=1` | do not check for new versions of the script |
+| `SELF_UPDATE=1` | update the script without asking |
 
 ## How it works
 - Dependencies: corefonts, tahoma, vcrun2022, gdiplus, dotnet48 (.NET Framework apps with DevExpress UI; wine-mono is not enough).
@@ -107,7 +121,10 @@ The script installs what is missing:
 MIT, see [LICENSE](LICENSE): you can use, modify and redistribute this script, also in forks and derived projects, keeping the copyright notice. The license covers this script and its documentation only, not the Comelit programs it installs.
 
 ## Changelog
-Changes for each version are in [CHANGELOG.md](CHANGELOG.md); the same notes are on the [releases page](https://github.com/STeXE89/comelit-bottles/releases).
+Changes for each version are in [CHANGELOG.md](CHANGELOG.md); the same notes are on the [releases page](https://github.com/STeXE89/comelit-bottles/releases). The version and release date of your copy: `./setup-comelit-bottles.sh --version`.
+
+## Authors
+Written and maintained by [STeXE89](https://github.com/STeXE89), with the people listed in [AUTHORS](AUTHORS).
 
 ## Contributing
 Bug reports, fixes and improvements are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) for what to include in a report and how to propose a change. Forks are welcome too; if you use or redistribute this project, please mention the original one: https://github.com/STeXE89/comelit-bottles

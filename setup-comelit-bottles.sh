@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
+#  Comelit software on Bottles (Linux)
 #  setup-comelit-bottles.sh
 #  Installs and updates the Comelit Windows desktop programs VIP Manager,
 #  Safe Manager and Simple Prog to use them on Linux, in Bottles (Flatpak).
-#  Version 1.0.0 (see CHANGELOG.md). License: MIT (see LICENSE).
-#  Forks and contributions are welcome.
+#  Forks and contributions are welcome (see CONTRIBUTING.md and CHANGELOG.md).
 #
 #  Usage:
 #    ./setup-comelit-bottles.sh [targets]                # install/update (default: all)
@@ -15,10 +15,14 @@
 #    ./setup-comelit-bottles.sh --backup [targets]       # full backup of the bottle(s) now
 #    ./setup-comelit-bottles.sh --restore <backup-file>  # restore a bottle (current one is kept aside)
 #    ./setup-comelit-bottles.sh --net [target]           # network report: host interfaces and Wine adapters
+#    ./setup-comelit-bottles.sh --version                # version, release date and authors
+#    ./setup-comelit-bottles.sh --self-update            # check now for a new version of the script
 #  Targets: vipmanager safemanager simpleprog
 #
 #  Default: one bottle "Comelit" (Windows 11, latest Wine runner) with all programs.
 #  Re-running is safe: bottles, dependencies, data and settings are kept.
+#  At start the script checks for a new release of itself on GitHub and, after
+#  confirmation, updates its own files and restarts.
 #  New versions are downloaded from Comelit Pro and installed in place after a full
 #  backup of the bottle.
 #  Specific versions: put a program's zip or installer (Setup_*.exe, Setup.msi) in
@@ -43,8 +47,16 @@
 #    SETUP_WIZARD=1        show the installers' wizards instead of installing unattended
 #    VIRTUAL_DESKTOP=1     programs inside one Wine desktop window (default; WxH, or 0 = off; remembered)
 #    NOT_RESPONDING_TIMEOUT=60  seconds before GNOME/Cinnamon report a busy window as not responding (0 = never)
+#    NO_SELF_UPDATE=1      do not check for new versions of the script
+#    SELF_UPDATE=1         update the script without asking
 # =============================================================================
 set -Eeuo pipefail
+
+TITLE="Comelit software on Bottles (Linux)"
+VERSION="1.0.0"
+RELEASE_DATE="2026-09-28"
+AUTHORS="STeXE89 <8591354+STeXE89@users.noreply.github.com> and contributors (see AUTHORS)"
+HOMEPAGE="https://github.com/STeXE89/comelit-bottles"
 
 APP_ID="com.usebottles.bottles"
 FLATHUB_URL="https://dl.flathub.org/repo/flathub.flatpakrepo"
@@ -481,6 +493,98 @@ cleanup_zips() {  # keep the newest KEEP_ZIPS zips of a program in the script fo
     matches "$z" "${ZIP[$t]}" || continue
     if (( ++n > KEEP_ZIPS )); then rm -f "$z"; c_info "Removed old installer $(basename "$z")"; fi
   done < <(ls -1t "$WORK_DIR"/*.zip 2>/dev/null)
+}
+
+# -----------------------------------------------------------------------------
+# Script updates (GitHub)
+# -----------------------------------------------------------------------------
+# The latest release of the repository is checked at every run (NO_SELF_UPDATE=1
+# skips it). A newer version is reported and, after confirmation, installed: a clone is fast
+# forwarded to the release tag, otherwise the files are replaced with those of the
+# release (the previous ones are saved in backups/). The script then restarts with
+# the same arguments.
+GH_REPO="${HOMEPAGE#*://github.com/}"
+GH_API="https://api.github.com/repos/$GH_REPO"
+SELF="$WORK_DIR/$(basename "${BASH_SOURCE[0]}")"
+SELF_TAG=""; SELF_VER=""; SELF_TARBALL=""
+
+self_release() {  # latest release: sets SELF_TAG, SELF_VER and SELF_TARBALL
+  local json
+  json="$(curl -fsSL -m 30 -A "$UA" -H 'Accept: application/vnd.github+json' \
+          "$GH_API/releases/latest" 2>/dev/null)" || return 1
+  SELF_TAG="$(json_get tag_name "$json")"
+  SELF_TARBALL="$(json_get tarball_url "$json")"
+  SELF_VER="$(name_version "$SELF_TAG")"
+  [[ -n "$SELF_TAG" && -n "$SELF_VER" ]]
+}
+
+self_git_update() {  # clone: fast forward to the release tag
+  local log="$LOG_DIR/self-update.log" g=(git -C "$WORK_DIR")
+  if [[ -n "$("${g[@]}" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
+    c_warn "Changed files in $WORK_DIR: update the clone yourself (git pull). Nothing changed."; return 1
+  fi
+  "${g[@]}" fetch --quiet --tags origin >"$log" 2>&1 \
+    && "${g[@]}" merge --quiet --ff-only "$SELF_TAG" >>"$log" 2>&1 && return 0
+  c_warn "git could not update the clone (log: $log): update it yourself (git pull). Nothing changed."
+  return 1
+}
+
+self_files_update() {  # not a clone: files of the release, the previous ones saved in backups/
+  local tmp top f b r=0 saved="" new=() old=() bak="$BACKUP_DIR/script-$VERSION-$(date +%Y%m%d-%H%M%S).tar.gz"
+  [[ -n "$SELF_TARBALL" ]] || { c_warn "Release $SELF_TAG without source archive: download it from $HOMEPAGE"; return 1; }
+  tmp="$(mktemp -d)"; top=""
+  if curl -fsSL -m 600 -A "$UA" -o "$tmp/src.tar.gz" "$SELF_TARBALL" && tar -xzf "$tmp/src.tar.gz" -C "$tmp"; then
+    top="$(find "$tmp" -mindepth 1 -maxdepth 1 -type d | head -1)"
+  fi
+  if [[ -z "$top" || ! -f "$top/$(basename "$SELF")" ]]; then
+    rm -rf "$tmp"; c_warn "Download of $SELF_TAG failed: nothing changed"; return 1
+  fi
+  while IFS= read -r f; do
+    new+=("$f"); b="$(basename "$f")"; [[ ! -f "$WORK_DIR/$b" ]] || old+=("$b")
+  done < <(find "$top" -maxdepth 1 -type f | sort)
+  (( ${#old[@]} == 0 )) || tar -czf "$bak" -C "$WORK_DIR" "${old[@]}" 2>/dev/null || true
+  [[ ! -f "$bak" ]] || saved=" (previous files: ${bak#"$WORK_DIR"/})"
+  for f in "${new[@]}"; do   # replaced by rename: bash keeps reading the file of the running script
+    b="$(basename "$f")"
+    cp -p "$f" "$WORK_DIR/.$b.new" && mv -f "$WORK_DIR/.$b.new" "$WORK_DIR/$b" || { rm -f "$WORK_DIR/.$b.new"; r=1; }
+  done
+  rm -rf "$tmp"
+  (( r == 0 )) || { c_warn "Some files could not be replaced in $WORK_DIR$saved"; return 1; }
+  chmod u+x "$SELF"
+  [[ -z "$saved" ]] || c_info "Files of $VERSION saved in ${bak#"$WORK_DIR"/}"
+}
+
+self_update() {  # <arguments to restart with>: check, ask, replace the files, restart
+  local force="${FORCE_SELF_UPDATE:-}"
+  [[ -z "${SELF_UPDATED:-}" ]] || return 0                       # already updated in this run
+  [[ -n "$force" || ( -z "${NO_SELF_UPDATE:-}" && -z "${OFFLINE:-}" ) ]] || return 0
+  command -v curl >/dev/null 2>&1 || return 0
+  if ! self_release; then
+    [[ -z "$force" ]] || c_warn "No release found for $GH_REPO on GitHub, or GitHub is not reachable"
+    return 0
+  fi
+  if [[ "$(ver_cmp "$SELF_VER" "$VERSION")" != 1 ]]; then
+    c_ok "The script is up to date (version $VERSION, latest release: $SELF_VER)"
+    return 0
+  fi
+  c_warn "New version of the script: $SELF_VER (installed: $VERSION)"
+  c_info "  $HOMEPAGE/releases/tag/$SELF_TAG"
+  if [[ -z "${SELF_UPDATE:-}" ]] && ! ask_yes "Download and install it now?"; then
+    c_info "Update skipped (SELF_UPDATE=1 installs it without asking, NO_SELF_UPDATE=1 stops the check)"
+    return 0
+  fi
+  c_info "Updating the script to $SELF_VER"
+  if git -C "$WORK_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    self_git_update || return 0
+  else
+    self_files_update || return 0
+  fi
+  c_ok "Script updated to $SELF_VER"
+  [[ -z "${SELF_NO_RESTART:-}" ]] || { c_info "Run the script again to use the new version"; return 0; }
+  c_info "Restarting$([[ $# -eq 0 ]] || echo ": $(basename "$SELF") $*")"
+  echo
+  export SELF_UPDATED=1
+  exec "$SELF" "$@"
 }
 
 # -----------------------------------------------------------------------------
@@ -1147,7 +1251,17 @@ check_updates() {
   done
 }
 
-usage() { sed -n '3,/^# ====/p' "$0" | sed '$d' | sed -E 's/^#( {1,2}|$)//'; }
+# Title, version, authors and license come from version(): the header comment has the
+# description and the usage, from the line after the title and the file name.
+usage() { version; echo; sed -n '5,/^# ====/p' "$0" | sed '$d' | sed -E 's/^#( {1,2}|$)//'; }
+
+version() {  # header of the script: also the banner of every run
+  printf '\e[1m%s %s (%s)\e[0m\n' "$TITLE" "$VERSION" "$RELEASE_DATE"
+  printf 'Script: %s\n' "$(basename "${BASH_SOURCE[0]}")"
+  printf 'Authors: %s\n' "$AUTHORS"
+  printf 'License: MIT (see LICENSE)\n'
+  printf 'Homepage: %s\n' "$HOMEPAGE"
+}
 
 # -----------------------------------------------------------------------------
 # Main
@@ -1228,9 +1342,17 @@ run_target() {
 
 main() {
   local cmd=install targets=() t t0
+  if [[ ! "${1:-}" =~ ^(-h|--help|-V|--version)$ ]]; then   # --help and --version print their own
+    version; echo
+    case "${1:-}" in
+      --self-update) FORCE_SELF_UPDATE=1 SELF_NO_RESTART=1 self_update; exit 0 ;;
+      *) self_update "$@" ;;
+    esac
+  fi
   while (( $# )); do
     case "$1" in
       -h|--help) usage; exit 0 ;;
+      -V|--version) version; exit 0 ;;
       --status)  status; exit 0 ;;
       --check)   check_updates; exit 0 ;;
       --diagnose) cmd=diagnose ;;
@@ -1238,6 +1360,7 @@ main() {
       --backup)  cmd=backup ;;
       --net)     cmd=net ;;
       --restore) shift; (( $# )) || die "Usage: --restore <backup-file>"; restore_bottle "$1"; exit 0 ;;
+      --self-update) FORCE_SELF_UPDATE=1 SELF_NO_RESTART=1 self_update; exit 0 ;;
       *) targets+=("$1") ;;
     esac
     shift

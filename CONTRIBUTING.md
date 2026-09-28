@@ -47,7 +47,7 @@ The whole project is a single Bash script, [setup-comelit-bottles.sh](setup-come
 - Keep the header comment of the script and its `--help` output in sync with what you changed.
 
 ## Versioning and releases
-Versions follow [semantic versioning](https://semver.org). A release updates the version in the script header, moves the `## [Unreleased]` entries under a new `## [x.y.z] - <date>` heading in the changelog, and is tagged `vx.y.z`; the release notes on GitHub are that changelog section.
+Versions follow [semantic versioning](https://semver.org). A release updates `TITLE`/`VERSION`/`RELEASE_DATE` in the script and the matching lines in the script header and the README, moves the `## [Unreleased]` entries under a new `## [x.y.z] - <date>` heading in the changelog, and is tagged `vx.y.z`; the release notes on GitHub are that changelog section.
 
 ## License
-This project is MIT licensed (see [LICENSE](LICENSE)). By contributing you agree that your contribution is released under the same license. The license covers this script and its documentation only, not the Comelit programs it installs.
+This project is MIT licensed (see [LICENSE](LICENSE)). By contributing you agree that your contribution is released under the same license. Add yourself to [AUTHORS](AUTHORS) in the pull request with your first change, if you want to be listed. The license covers this script and its documentation only, not the Comelit programs it installs.
