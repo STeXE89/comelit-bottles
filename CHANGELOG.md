@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to Comelit software on Bottles (Linux). Dates are release dates (YYYY-MM-DD); authors are listed in [AUTHORS](AUTHORS).
 
-## [Unreleased]
+## [1.1.0] - 2026-09-28
 ### Added
 - Check at start for a new release on GitHub, with confirmation, update of all the files of the release (git fast forward in a clone, release files otherwise) and restart with the same arguments
 - `--self-update` command and `NO_SELF_UPDATE`, `SELF_UPDATE` options
@@ -10,7 +10,7 @@ All notable changes to Comelit software on Bottles (Linux). Dates are release da
 ### Changed
 - `--help` prints the same header: version, release date, authors and license are no longer repeated in the comment of the script
 
-## [1.0.0] - 2026-09-28 - first release
+## [1.0.0] - 2026-09-28
 ### Added
 - Installation and update of Comelit VIP Manager, Safe Manager and Simple Prog on Linux with Bottles (Flatpak)
 - Shared bottle for all programs or one bottle per program
