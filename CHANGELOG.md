@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to Comelit software on Bottles (Linux). Dates are release dates (YYYY-MM-DD); authors are listed in [AUTHORS](AUTHORS).
 
-## [Unreleased]
+## [1.2.0] - 2026-09-30
 ### Added
 - `--desktop <0|1|WxH>` command: turns the Wine desktop window on or off, or resizes it, without a full run
 
