@@ -12,6 +12,7 @@
 #    ./setup-comelit-bottles.sh --status                 # bottles, runners, versions
 #    ./setup-comelit-bottles.sh --diagnose <target>      # run with Wine debug log
 #    ./setup-comelit-bottles.sh --com [targets]          # map connected serial devices to COM ports
+#    ./setup-comelit-bottles.sh --desktop <0|1|WxH>      # Wine desktop window: off, screen size or a size
 #    ./setup-comelit-bottles.sh --backup [targets]       # full backup of the bottle(s) now
 #    ./setup-comelit-bottles.sh --restore <backup-file>  # restore a bottle (current one is kept aside)
 #    ./setup-comelit-bottles.sh --net [target]           # network report: host interfaces and Wine adapters
@@ -45,8 +46,11 @@
 #    COM_DEV=/dev/ttyACM0  devices mapped to COM1.. (comma separated) instead of auto-detection
 #    NO_MENU=1             do not create host application menu entries
 #    SETUP_WIZARD=1        show the installers' wizards instead of installing unattended
-#    VIRTUAL_DESKTOP=1     programs inside one Wine desktop window (default; WxH, or 0 = off; remembered)
+#    VIRTUAL_DESKTOP=1     programs inside one Wine desktop window (1 = screen size, or WxH;
+#                          default 0 = off, each program in its own window; remembered)
 #    NOT_RESPONDING_TIMEOUT=60  seconds before GNOME/Cinnamon report a busy window as not responding (0 = never)
+#    TAKE_FOCUS=1          Wine takes the focus of its windows (default: the window manager does)
+#    DECORATED=1           windows framed by the window manager (default: only the Wine frame)
 #    NO_SELF_UPDATE=1      do not check for new versions of the script
 #    SELF_UPDATE=1         update the script without asking
 # =============================================================================
@@ -234,8 +238,17 @@ bsh() {  # bsh <bottle> <command>: bash inside the Bottles sandbox (BSH_RUNNER o
     --env=PATH="$r:/app/bin:/usr/bin:/bin" "$APP_ID" -c "$pre$*"
 }
 
+prefix_busy() { pgrep -f "$BOTTLES_DIR/$1/drive_c" >/dev/null 2>&1; }  # a program of the bottle is running
+
+# wineserver writes user.reg when it exits: without waiting, the next change reads it stale
+# (with a program running there is nothing to wait for: it reads the live registry).
+wine_reg_run() {  # <bottle> <reg command>
+  local w="; timeout 10 wineserver -w"
+  if prefix_busy "$1"; then w=""; fi
+  bsh "$1" "$2$w" >>"$LOG_DIR/$1-reg.log" 2>&1 || true
+}
 wine_reg() {  # wine_reg <bottle> <key> <value> <type> <data>
-  bsh "$1" "wine reg add '$2' /v '$3' /t $4 /d '$5' /f >/dev/null" >>"$LOG_DIR/$1-reg.log" 2>&1 || true
+  wine_reg_run "$1" "wine reg add '$2' /v '$3' /t $4 /d '$5' /f"
 }
 set_winver() { wine_reg "$1" 'HKCU\Software\Wine' Version REG_SZ "$WIN_VERSION"; }
 
@@ -310,13 +323,15 @@ installed_exe() {
 }
 # One Wine desktop window keeps the programs' layered windows (DevExpress shadows) in the right
 # stacking order with the host windows.
-set_virtual_desktop() {  # VIRTUAL_DESKTOP, else the last value given, else 1
+# The desktop window shows its own background around the programs, stays open until they all
+# exit and is sized by Wine: off unless Wine windows show through other windows.
+set_virtual_desktop() {  # VIRTUAL_DESKTOP, else the last value given, else 0
   local b="$1" f="$STATE_DIR/virtual-desktop" v res
-  v="${VIRTUAL_DESKTOP:-$(cat "$f" 2>/dev/null || true)}"
-  [[ "$v" =~ ^(0|1|[0-9]+x[0-9]+)$ ]] || { [[ -z "$v" ]] || c_warn "VIRTUAL_DESKTOP=$v not valid: using 1"; v=1; }
+  v="${VIRTUAL_DESKTOP:-$(cat "$f" 2>/dev/null || echo 0)}"
+  [[ "$v" =~ ^(0|1|[0-9]+x[0-9]+)$ ]] || { [[ -z "$v" ]] || c_warn "VIRTUAL_DESKTOP=$v not valid: using 0"; v=0; }
   [[ -z "${VIRTUAL_DESKTOP:-}" ]] || echo "$v" >"$f"
   if [[ "$v" == 0 ]]; then
-    bsh "$b" "wine reg delete 'HKCU\\Software\\Wine\\Explorer' /v Desktop /f" >>"$LOG_DIR/$b-reg.log" 2>&1 || true
+    wine_reg_run "$b" "wine reg delete 'HKCU\\Software\\Wine\\Explorer' /v Desktop /f"
     c_ok "$b: virtual desktop off"; return
   fi
   res="$v"
@@ -325,6 +340,26 @@ set_virtual_desktop() {  # VIRTUAL_DESKTOP, else the last value given, else 1
   wine_reg "$b" 'HKCU\Software\Wine\Explorer' Desktop REG_SZ "$b"
   wine_reg "$b" 'HKCU\Software\Wine\Explorer\Desktops' "$b" REG_SZ "$res"
   c_ok "$b: virtual desktop $res"
+}
+
+# Wine answers WM_TAKE_FOCUS by minimizing a window the window manager leaves unfocused,
+# as happens when the loading window that had the focus is destroyed.
+set_window_focus() {  # <bottle>: TAKE_FOCUS=1 gives the protocol back to Wine
+  local v=N; [[ -z "${TAKE_FOCUS:-}" ]] || v=Y
+  wine_reg "$1" 'HKCU\Software\Wine\X11 Driver' UseTakeFocus REG_SZ "$v"
+  if [[ "$v" == N ]]; then c_ok "$1: focus of the windows left to the window manager"
+  else c_ok "$1: focus of the windows taken by Wine"; fi
+}
+
+# The Wine theme draws its own title bar: decorated by the window manager too, every
+# window has two frames. The Bottles setting writes the same value: kept in sync.
+set_window_frame() {  # <bottle>: DECORATED=1 puts the window manager frame back
+  local v=N p=false
+  [[ "${DECORATED:-0}" != 1 ]] || { v=Y; p=true; }
+  bcli edit -b "$1" --params "decorated:$p" >>"$LOG_DIR/$1-edit.log" 2>&1 || true
+  wine_reg "$1" 'HKCU\Software\Wine\X11 Driver' Decorated REG_SZ "$v"
+  if [[ "$v" == N ]]; then c_ok "$1: one window frame, drawn by Wine"
+  else c_ok "$1: windows framed by the window manager"; fi
 }
 
 bottle_has_programs() {
@@ -498,11 +533,8 @@ cleanup_zips() {  # keep the newest KEEP_ZIPS zips of a program in the script fo
 # -----------------------------------------------------------------------------
 # Script updates (GitHub)
 # -----------------------------------------------------------------------------
-# The latest release of the repository is checked at every run (NO_SELF_UPDATE=1
-# skips it). A newer version is reported and, after confirmation, installed: a clone is fast
-# forwarded to the release tag, otherwise the files are replaced with those of the
-# release (the previous ones are saved in backups/). The script then restarts with
-# the same arguments.
+# The latest release is checked at every run: with confirmation a clone is fast forwarded
+# to its tag, otherwise the files of the release replace the current ones (saved in backups/).
 GH_REPO="${HOMEPAGE#*://github.com/}"
 GH_API="https://api.github.com/repos/$GH_REPO"
 SELF="$WORK_DIR/$(basename "${BASH_SOURCE[0]}")"
@@ -1251,9 +1283,8 @@ check_updates() {
   done
 }
 
-# Title, version, authors and license come from version(): the header comment has the
-# description and the usage, from the line after the title and the file name.
-usage() { version; echo; sed -n '5,/^# ====/p' "$0" | sed '$d' | sed -E 's/^#( {1,2}|$)//'; }
+usage() {  # version() prints the title and the metadata, the comment the rest
+  version; echo; sed -n '5,/^# ====/p' "$0" | sed '$d' | sed -E 's/^#( {1,2}|$)//'; }
 
 version() {  # header of the script: also the banner of every run
   printf '\e[1m%s %s (%s)\e[0m\n' "$TITLE" "$VERSION" "$RELEASE_DATE"
@@ -1308,6 +1339,7 @@ prepare_bottle() {  # create, dependencies (deps runner), COM ports; the Wine ru
   if [[ -n "${TDEPS[$b]}" ]]; then install_deps "$b" "${TDEPS[$b]}"; else c_ok "$b: dependencies installed"; fi
   ! dotnet_ok "$b" || dotnet_host_config "$b"
   set_virtual_desktop "$b"
+  set_window_focus "$b"; set_window_frame "$b"
   ! bottle_serial "$b" || setup_serial "$b"
   if [[ " $DEPS_DEFAULT " == *" dotnet48 "* ]] && ! dotnet_ok "$b"; then
     BROKEN[$b]=1
@@ -1357,6 +1389,10 @@ main() {
       --check)   check_updates; exit 0 ;;
       --diagnose) cmd=diagnose ;;
       --com)     cmd=com ;;
+      --desktop) cmd=desktop
+                 if [[ "${2:-}" =~ ^(0|1|[0-9]+x[0-9]+)$ ]]; then VIRTUAL_DESKTOP="$2"; shift
+                 elif [[ -n "${2:-}" && -z "${BOTTLE[${2:-}]:-}" ]]; then
+                   die "Usage: --desktop <0|1|WxH> [targets] (0 = off, 1 = screen size)"; fi ;;
       --backup)  cmd=backup ;;
       --net)     cmd=net ;;
       --restore) shift; (( $# )) || die "Usage: --restore <backup-file>"; restore_bottle "$1"; exit 0 ;;
@@ -1375,6 +1411,16 @@ main() {
       (( SERIAL[$t] )) && bottle_exists "${BOTTLE[$t]}" && [[ -z "${READY[${BOTTLE[$t]}]:-}" ]] || continue
       READY[${BOTTLE[$t]}]=1; com_setup "${BOTTLE[$t]}"
     done
+    exit 0
+  fi
+  if [[ "$cmd" == desktop ]]; then
+    for t in "${targets[@]}"; do
+      bottle_exists "${BOTTLE[$t]}" && [[ -z "${READY[${BOTTLE[$t]}]:-}" ]] || continue
+      READY[${BOTTLE[$t]}]=1; set_virtual_desktop "${BOTTLE[$t]}"
+      set_window_focus "${BOTTLE[$t]}"; set_window_frame "${BOTTLE[$t]}"
+    done
+    (( ${#READY[@]} )) || c_warn "No bottle to change: install the programs first"
+    c_info "Close the open programs and start them again to apply it"
     exit 0
   fi
   if [[ "$cmd" == net ]]; then net_report "${targets[0]}"; exit 0; fi

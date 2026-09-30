@@ -23,6 +23,7 @@ cd comelit-bottles
 ./setup-comelit-bottles.sh --status                  # bottles, runners, installed versions
 ./setup-comelit-bottles.sh --diagnose safemanager    # start with a Wine debug log
 ./setup-comelit-bottles.sh --com                     # map connected serial devices to COM ports
+./setup-comelit-bottles.sh --desktop 0               # Wine desktop window: 0 = off, 1 = screen size, or WxH
 ./setup-comelit-bottles.sh --backup                  # full backup of the bottle
 ./setup-comelit-bottles.sh --restore backups/<file>  # restore a bottle
 ./setup-comelit-bottles.sh --net                     # network report: host interfaces, firewall, Wine adapters
@@ -83,8 +84,10 @@ The script installs what is missing:
 | `KEEP_ZIPS=N` | installer zips kept per program |
 | `COM_DEV=/dev/ttyACM0` | devices mapped to COM1.. (comma separated) instead of auto-detection |
 | `NO_MENU=1` | no host applications menu entries |
-| `VIRTUAL_DESKTOP=1` | programs inside one Wine desktop window: `1` = screen size (default), `WxH`, `0` = off; the last value given is kept |
+| `VIRTUAL_DESKTOP=1` | programs inside one Wine desktop window: `0` = off (default), `1` = screen size, `WxH`; the last value given is kept, `--desktop` changes it without a full run |
 | `NOT_RESPONDING_TIMEOUT=60` | seconds before GNOME/Cinnamon report a busy window as not responding (`0` = never) |
+| `TAKE_FOCUS=1` | Wine takes the focus of its windows (`WM_TAKE_FOCUS`); by default the window manager does |
+| `DECORATED=1` | windows framed by the window manager too; by default only the Wine theme frames them |
 | `NO_SELF_UPDATE=1` | do not check for new versions of the script |
 | `SELF_UPDATE=1` | update the script without asking |
 
@@ -94,7 +97,7 @@ The script installs what is missing:
 - .NET is verified before the installers run. A bottle with a failed .NET installation and no programs can be recreated (the old one is renamed `<bottle>.broken-<date>`).
 - `rundll32.exe.config` makes installer helpers use .NET 4 instead of the missing .NET 2.0.
 - Installers run unattended (Advanced Installer `/exenoui /qn`, MSI `/qn ALLUSERS=1`), extracted into `installers/<program name>/`.
-- By default the programs run inside one Wine desktop window (virtual desktop), which keeps their windows in the right stacking order with the host windows.
+- By default each program runs in its own window. `VIRTUAL_DESKTOP=1` (or `--desktop 1`) puts them all inside one Wine desktop window, which keeps their windows in the right stacking order with the host windows on the window managers that need it; that window shows its own background around the programs, stays open until all of them exit and, being sized by Wine and not by the window manager, cannot be maximised or made full screen.
 - Programs are added to Bottles only if not already listed, and to the host applications menu (`~/.local/share/applications/comelit-<target>.desktop`, launchers and icons in `~/.local/share/comelit-bottles/`).
 - Each step shows the overall progress `[ 42%] (7/20)`; a live line shows elapsed time, activity and download progress. Logs are in `logs/`.
 
@@ -114,7 +117,10 @@ The script installs what is missing:
 - **Serial port not detected**: check `ls -l /dev/serial/by-id/` or `dmesg | tail`, run `--com`, select COM1 in the program; your user must be in `dialout`.
 - **Broken windows or graphics**: bottle → Settings, disable DXVK or try another runner.
 - **"Not responding" dialogs while a program loads**: the program is busy and Wine cannot answer the desktop's check (GNOME, Cinnamon) meanwhile. Raise the timeout with `NOT_RESPONDING_TIMEOUT=60` (or `0` to disable it for all applications).
-- **Program windows showing through other windows**: happens with the virtual desktop off (`VIRTUAL_DESKTOP=0`); run once with `VIRTUAL_DESKTOP=1` to turn it back on.
+- **Program windows showing through other windows**: happens with the virtual desktop off (the default); `--desktop 1` turns it back on.
+- **Two frames around every window** (a title bar inside another): the Wine theme draws its own frame and the window manager adds one. The script leaves only the Wine one (`Decorated=N`, also set as the Bottles window setting); `DECORATED=1` gives the frame back to the window manager. Windows are then moved and resized from the frame Wine draws, or with the window manager shortcut (`Super` + drag on GNOME).
+- **Window minimised by itself when loading finishes**: the loading window that had the focus is destroyed and the main window is left unfocused; Wine answers `WM_TAKE_FOCUS` and minimises it. The script sets `UseTakeFocus=N` so the window manager gives the focus itself; `TAKE_FOCUS=1` goes back to Wine's handling. Run `--desktop 0` (or any full run) to apply it to an existing bottle.
+- **Black border around the programs, window not full screen, background still there after closing them**: they are the Wine desktop window of `VIRTUAL_DESKTOP=1`, not the programs; `--desktop 0` turns it off, `--desktop 1600x900` keeps it smaller than the screen.
 - **LAN devices not found or connections failing** (cloud works): run `--net`. Check that the LAN with the devices is the default route (VPN, Docker, VirtualBox or libvirt interfaces can take broadcasts elsewhere), the host firewall (UDP broadcast and replies), and, if a program acts as a TFTP/SNMP server (firmware upload, traps), that low ports are allowed: `sudo sysctl -w net.ipv4.ip_unprivileged_port_start=69`.
 
 ## License

@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to Comelit software on Bottles (Linux). Dates are release dates (YYYY-MM-DD); authors are listed in [AUTHORS](AUTHORS).
 
+## [Unreleased]
+### Added
+- `--desktop <0|1|WxH>` command: turns the Wine desktop window on or off, or resizes it, without a full run
+
+### Changed
+- The Wine desktop window is off by default: it showed its own background around the programs, stayed open until all of them exited and could not be maximised or made full screen. `VIRTUAL_DESKTOP=1` or `--desktop 1` turns it back on where it is needed
+
+### Fixed
+- Two frames around every window: the window manager no longer decorates the Wine windows, which the Wine theme already frames (`DECORATED=1` restores it)
+- Window minimised by itself when a program finished loading: `UseTakeFocus=N` leaves the focus to the window manager instead of letting Wine minimise a window left unfocused (`TAKE_FOCUS=1` restores Wine's handling)
+- Registry changes (Windows version, COM ports, Wine desktop window) could be lost: the script now waits for wineserver to write `user.reg` instead of letting the next change read the file before it is updated
+
 ## [1.1.0] - 2026-09-28
 ### Added
 - Check at start for a new release on GitHub, with confirmation, update of all the files of the release (git fast forward in a clone, release files otherwise) and restart with the same arguments
