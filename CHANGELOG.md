@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to Comelit software on Bottles (Linux). Dates are release dates (YYYY-MM-DD); authors are listed in [AUTHORS](AUTHORS).
 
+## [Unreleased]
+### Added
+- Program data (projects and settings) copied before every installer and put back for each file the installer replaced or removed: the Comelit packages ship their database as a file of the package and an update installs an empty one over it (`NO_DATA_GUARD=1` turns it off)
+
 ## [1.2.1] - 2026-10-26
 ### Fixed
 - Installation of Bottles failing with `No remote refs found for 'flathub'` where Flathub was configured only for all users: the remote is looked for in the user installation, the one Bottles is installed into

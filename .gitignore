@@ -1,6 +1,7 @@
 # Created by the script at run time
 backups/
 cache/
+recovered/
 installers/
 logs/
 state/

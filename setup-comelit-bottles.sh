@@ -41,6 +41,7 @@
 #    SKIP_DEPS=1           skip dependencies
 #    SKIP_UPDATE=1         do not update Bottles/Flatpak runtimes
 #    NO_BACKUP=1           no backup before updates
+#    NO_DATA_GUARD=1       do not save and put back the program data around the installers
 #    KEEP_BACKUPS=2        full backups kept per bottle
 #    KEEP_ZIPS=2           installer zips kept per program
 #    COM_DEV=/dev/ttyACM0  devices mapped to COM1.. (comma separated) instead of auto-detection
@@ -106,6 +107,13 @@ profile safemanager Comelit-SafeManager "Comelit Safe Manager" "$PRO/antintrusio
 profile simpleprog  Comelit-SimpleProg  "Comelit Simple Prog"  "$PRO/domotica/software-3/simpleprog" \
         'sw-simpleprog*.zip' 'Setup_SimpleProg*.exe' 1 'simple.?prog'
 ALL_TARGETS=(vipmanager safemanager simpleprog)
+# Program data under drive_c: the installers ship the project database as a file of the
+# package, so an update removes it and puts an empty one back (Safe Manager: the projects).
+# Safe Manager keeps the open projects in an XPO store in the temporary folder when it
+# cannot use its database: that file is saved too. Paths may contain *.
+declare -A DATA=( [vipmanager]='ProgramData/Comelit/VIPManager ProgramData/Comelit/ViPManager2'
+                  [safemanager]='ProgramData/Comelit/SafeManager users/*/AppData/Local/Temp/defaultDb*.xml'
+                  [simpleprog]='ProgramData/Comelit/SimpleProg' )
 # Unattended install switches (Advanced Installer exe, Visual Studio MSI). The wizards'
 # custom skins are not drawn correctly by Wine and add failure points.
 declare -A SILENT_ARGS=( [vipmanager]="/exenoui /qn" [safemanager]="/qn ALLUSERS=1" [simpleprog]="/exenoui /qn" )
@@ -1115,6 +1123,38 @@ msi_install() {  # <target> <msi> <mode>
   BSH_RUNNER="$(deps_runner)" run_live "$LOG_DIR/$t-install.log" bsh "$b" "$cmd" || true
 }
 
+data_root() { echo "$BOTTLES_DIR/${BOTTLE[$1]}/drive_c"; }
+
+save_data() {  # <target>: copy the program data aside before the installer
+  local t="$1" p src rel root n=0 keep="$CACHE_DIR/data-$1"
+  [[ -z "${NO_DATA_GUARD:-}" ]] || return 0
+  root="$(data_root "$t")"; rm -rf "$keep"
+  for p in ${DATA[$t]}; do
+    for src in "$root"/$p; do
+      [[ -e "$src" ]] || continue
+      rel="${src#"$root"/}"
+      if [[ -d "$src" ]]; then mkdir -p "$keep/$rel"; cp -a "$src/." "$keep/$rel/" 2>/dev/null
+      else mkdir -p "$(dirname "$keep/$rel")"; cp -a "$src" "$keep/$rel" 2>/dev/null; fi
+      if [[ -e "$keep/$rel" ]]; then n=$((n + 1)); else c_warn "${TITLE[$t]}: $rel not saved"; fi
+    done
+  done
+  (( n == 0 )) || c_info "${TITLE[$t]}: data saved before the installer ($(du -sh "$keep" | cut -f1))"
+}
+
+restore_data() {  # <target>: put back the data files the installer replaced or removed
+  local t="$1" root f rel n=0 keep="$CACHE_DIR/data-$1" fresh="$CACHE_DIR/data-$1.installer"
+  [[ -d "$keep" ]] || return 0
+  root="$(data_root "$t")"; rm -rf "$fresh"
+  while IFS= read -r f; do
+    rel="${f#"$keep"/}"
+    ! cmp -s "$f" "$root/$rel" || continue                     # untouched by the installer
+    if [[ -e "$root/$rel" ]]; then mkdir -p "$(dirname "$fresh/$rel")"; cp -a "$root/$rel" "$fresh/$rel"; fi
+    mkdir -p "$(dirname "$root/$rel")"; cp -a "$f" "$root/$rel" && n=$((n + 1))
+  done < <(find "$keep" -type f)
+  (( n == 0 )) || c_warn "${TITLE[$t]}: $n data file(s) of projects and settings replaced by the installer: restored" \
+                         "(the ones of the installer: cache/$(basename "$fresh"))"
+}
+
 run_installer() {  # <target> <install|update|downgrade|reinstall|replace>
   local t="$1" mode="$2" b="${BOTTLE[$1]}" setup old
   step_begin "$mode" "${TITLE[$t]}: $mode program"
@@ -1123,6 +1163,7 @@ run_installer() {  # <target> <install|update|downgrade|reinstall|replace>
     c_warn "${TITLE[$t]}: ${SETUP[$t]} not found in $(basename "${ZIPFILE[$t]}")"; step_end "$mode"; return
   fi
   old="$(version_of "$t")"
+  [[ "$mode" == install ]] || save_data "$t"
   if [[ "$mode" =~ ^(downgrade|reinstall|replace)$ ]]; then uninstall_program "$t"; fi
   if [[ -n "${SETUP_WIZARD:-}" ]]; then c_info "${TITLE[$t]}: running $(basename "$setup")${old:+ (installed: $old)}: complete the wizard"
   else c_info "${TITLE[$t]}: installing $(basename "$setup") unattended${old:+ (installed: $old)}"; fi
@@ -1132,6 +1173,7 @@ run_installer() {  # <target> <install|update|downgrade|reinstall|replace>
          || c_warn "${TITLE[$t]}: installer error (log: $LOG_DIR/$t-install.log)"; fi
   c_info "${TITLE[$t]}: waiting for Wine to exit (close the program if it opened)"
   BSH_RUNNER="$(deps_runner)" run_live "$LOG_DIR/$t-wait.log" bsh "$b" 'wineserver -w' || true
+  [[ "$mode" == install ]] || restore_data "$t"
   if [[ -n "$(installed_exe "$t")" ]]; then
     fingerprint "${ZIPFILE[$t]}" >"$STATE_DIR/$t.state"
     if [[ -n "${PIN_FILE[$t]:-}" ]]; then pin_hash "$t"; echo "${PIN_ID[$t]}" >"$STATE_DIR/$t.pin"

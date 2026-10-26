@@ -50,6 +50,7 @@ The script installs what is missing:
 - Local zips in the script folder or `~/Downloads` are used too; `OFFLINE=1` uses only local zips. `KEEP_ZIPS=2` zips per program are kept.
 - Re-running is safe: bottles, data and settings are kept, installed dependencies are skipped.
 - A new version is installed in place after a **full backup of the bottle** (`backups/<bottle>-<date>.tar.zst`, `KEEP_BACKUPS=2`). Programs share registry, users and ProgramData, so only a whole-bottle snapshot restores consistently.
+- **Projects and settings are protected from the installers**: the Comelit packages ship their database as a file of the package, so an update removes it and installs an empty one. Before each installer the program data (`C:\ProgramData\Comelit\<program>`, and for Safe Manager the `defaultDb*.xml` store in the temporary folder) is copied to `cache/data-<target>/`, and every file the installer replaced or removed is put back afterwards; the installer's own copies are kept in `cache/data-<target>.installer/`. `NO_DATA_GUARD=1` turns it off.
 - `--restore` asks for confirmation and renames the current bottle `<bottle>.before-restore-<date>`. The next online run updates the programs again; use `OFFLINE=1` to stay on the restored versions.
 
 ## Script updates
@@ -81,6 +82,7 @@ The script installs what is missing:
 | `FORCE_DEPS=1` / `SKIP_DEPS=1` | reinstall / skip dependencies |
 | `SKIP_UPDATE=1` | do not update Bottles/Flatpak runtimes |
 | `NO_BACKUP=1` / `KEEP_BACKUPS=N` | no backup before updates / backups kept per bottle |
+| `NO_DATA_GUARD=1` | do not save and put back the program data (projects, settings) around the installers |
 | `KEEP_ZIPS=N` | installer zips kept per program |
 | `COM_DEV=/dev/ttyACM0` | devices mapped to COM1.. (comma separated) instead of auto-detection |
 | `NO_MENU=1` | no host applications menu entries |
@@ -117,8 +119,9 @@ The script installs what is missing:
 - **Serial port not detected**: check `ls -l /dev/serial/by-id/` or `dmesg | tail`, run `--com`, select COM1 in the program; your user must be in `dialout`.
 - **Broken windows or graphics**: bottle → Settings, disable DXVK or try another runner.
 - **"Not responding" dialogs while a program loads**: the program is busy and Wine cannot answer the desktop's check (GNOME, Cinnamon) meanwhile. Raise the timeout with `NOT_RESPONDING_TIMEOUT=60` (or `0` to disable it for all applications).
-- **Program windows showing through other windows**: happens with the virtual desktop off (the default); `--desktop 1` turns it back on.
+- **Program windows showing through other windows** (an outline of the window stays visible over the other applications): on GNOME with Wayland it comes from the XWayland path, not from Wine: it appears with any combination of window frame, focus and desktop settings, and disappears only with Wine's own Wayland driver (`HKCU\Software\Wine\Drivers` → `Graphics`=`wayland`), which however draws the DevExpress interface of these programs badly. `--desktop 1` (or a size) hides it by putting the programs inside one Wine window, at the price of the desktop background around them and of a window the window manager cannot resize.
 - **Two frames around every window** (a title bar inside another): the Wine theme draws its own frame and the window manager adds one. The script leaves only the Wine one (`Decorated=N`, also set as the Bottles window setting); `DECORATED=1` gives the frame back to the window manager. Windows are then moved and resized from the frame Wine draws, or with the window manager shortcut (`Super` + drag on GNOME).
+- **Projects missing after an update or a crash (Safe Manager)**: look for them in this order — `cache/data-safemanager/` (copy made before the last installer), the project exports in `Documents\SafeManager\*.xcf` (import them from the program), a full backup in `backups/` (`--restore`), and `C:\users\<user>\AppData\Local\Temp\defaultDb*.xml`, the working database the program falls back to when it cannot use `C:\ProgramData\Comelit\SafeManager\Data\CENTRALEALLARME.FDB`. That fallback lives in the temporary folder: export the projects regularly (`.xcf`) and do not rely on it.
 - **Window minimised by itself when loading finishes**: the loading window that had the focus is destroyed and the main window is left unfocused; Wine answers `WM_TAKE_FOCUS` and minimises it. The script sets `UseTakeFocus=N` so the window manager gives the focus itself; `TAKE_FOCUS=1` goes back to Wine's handling. Run `--desktop 0` (or any full run) to apply it to an existing bottle.
 - **Black border around the programs, window not full screen, background still there after closing them**: they are the Wine desktop window of `VIRTUAL_DESKTOP=1`, not the programs; `--desktop 0` turns it off, `--desktop 1600x900` keeps it smaller than the screen.
 - **LAN devices not found or connections failing** (cloud works): run `--net`. Check that the LAN with the devices is the default route (VPN, Docker, VirtualBox or libvirt interfaces can take broadcasts elsewhere), the host firewall (UDP broadcast and replies), and, if a program acts as a TFTP/SNMP server (firmware upload, traps), that low ports are allowed: `sudo sysctl -w net.ipv4.ip_unprivileged_port_start=69`.
