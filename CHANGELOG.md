@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to Comelit software on Bottles (Linux). Dates are release dates (YYYY-MM-DD); authors are listed in [AUTHORS](AUTHORS).
 
-## [Unreleased]
+## [1.3.0] - 2026-10-26
 ### Added
 - Program data (projects and settings) copied before every installer and put back for each file the installer replaced or removed: the Comelit packages ship their database as a file of the package and an update installs an empty one over it (`NO_DATA_GUARD=1` turns it off)
 
