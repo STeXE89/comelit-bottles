@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to Comelit software on Bottles (Linux). Dates are release dates (YYYY-MM-DD); authors are listed in [AUTHORS](AUTHORS).
 
+## [Unreleased]
+### Fixed
+- Installation of Bottles failing with `No remote refs found for 'flathub'` where Flathub was configured only for all users: the remote is looked for in the user installation, the one Bottles is installed into
+
 ## [1.2.0] - 2026-09-30
 ### Added
 - `--desktop <0|1|WxH>` command: turns the Wine desktop window on or off, or resizes it, without a full run

@@ -645,7 +645,9 @@ ensure_host_tools() {
 }
 
 ensure_bottles() {
-  flatpak remotes --columns=name 2>/dev/null | grep -qx flathub \
+  # Bottles is installed in the user scope: a flathub remote of the system scope is not
+  # enough, the install would fail with "No remote refs found for 'flathub'".
+  flatpak remotes --user --columns=name 2>/dev/null | grep -qx flathub \
     || flatpak remote-add --user --if-not-exists flathub "$FLATHUB_URL"
   if ! flatpak info "$APP_ID" >/dev/null 2>&1; then
     c_info "Installing Bottles and its runtimes from Flathub"
