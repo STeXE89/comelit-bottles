@@ -1,6 +1,6 @@
 # Comelit software on Bottles (Linux)
 
-Version 1.2.0, released 2026-09-30.
+Version 1.2.1, released 2026-10-26.
 
 Comelit VIP Manager, Safe Manager and Simple Prog are desktop programs developed for Windows. This script lets you install and use them on Linux:
 

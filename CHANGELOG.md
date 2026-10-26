@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to Comelit software on Bottles (Linux). Dates are release dates (YYYY-MM-DD); authors are listed in [AUTHORS](AUTHORS).
 
-## [Unreleased]
+## [1.2.1] - 2026-10-26
 ### Fixed
 - Installation of Bottles failing with `No remote refs found for 'flathub'` where Flathub was configured only for all users: the remote is looked for in the user installation, the one Bottles is installed into
 

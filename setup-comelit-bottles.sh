@@ -57,8 +57,8 @@
 set -Eeuo pipefail
 
 TITLE="Comelit software on Bottles (Linux)"
-VERSION="1.2.0"
-RELEASE_DATE="2026-09-30"
+VERSION="1.2.1"
+RELEASE_DATE="2026-10-26"
 AUTHORS="STeXE89 <8591354+STeXE89@users.noreply.github.com> and contributors (see AUTHORS)"
 HOMEPAGE="https://github.com/STeXE89/comelit-bottles"
 
